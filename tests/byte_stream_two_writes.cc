@@ -6,129 +6,128 @@
 
 using namespace std;
 
-int main()
-{
-  try {
-    {
-      ByteStreamTestHarness test { "write-write-end-pop-pop", 15 };
+int main() {
+    try {
+        {
+            ByteStreamTestHarness test{"write-write-end-pop-pop", 15};
 
-      test.execute( Push { "cat" } );
+            test.execute(Write{"cat"});
 
-      test.execute( IsClosed { false } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 0 } );
-      test.execute( BytesPushed { 3 } );
-      test.execute( AvailableCapacity { 12 } );
-      test.execute( BytesBuffered { 3 } );
-      test.execute( Peek { "cat" } );
+            test.execute(InputEnded{false});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{0});
+            test.execute(BytesWritten{3});
+            test.execute(RemainingCapacity{12});
+            test.execute(BufferSize{3});
+            test.execute(Peek{"cat"});
 
-      test.execute( Push { "tac" } );
+            test.execute(Write{"tac"});
 
-      test.execute( IsClosed { false } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 0 } );
-      test.execute( BytesPushed { 6 } );
-      test.execute( AvailableCapacity { 9 } );
-      test.execute( BytesBuffered { 6 } );
-      test.execute( Peek { "cattac" } );
+            test.execute(InputEnded{false});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{0});
+            test.execute(BytesWritten{6});
+            test.execute(RemainingCapacity{9});
+            test.execute(BufferSize{6});
+            test.execute(Peek{"cattac"});
 
-      test.execute( Close {} );
+            test.execute(EndInput{});
 
-      test.execute( IsClosed { true } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 0 } );
-      test.execute( BytesPushed { 6 } );
-      test.execute( AvailableCapacity { 9 } );
-      test.execute( BytesBuffered { 6 } );
-      test.execute( Peek { "cattac" } );
+            test.execute(InputEnded{true});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{0});
+            test.execute(BytesWritten{6});
+            test.execute(RemainingCapacity{9});
+            test.execute(BufferSize{6});
+            test.execute(Peek{"cattac"});
 
-      test.execute( Pop { 2 } );
+            test.execute(Pop{2});
 
-      test.execute( IsClosed { true } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 2 } );
-      test.execute( BytesPushed { 6 } );
-      test.execute( AvailableCapacity { 11 } );
-      test.execute( BytesBuffered { 4 } );
-      test.execute( Peek { "ttac" } );
+            test.execute(InputEnded{true});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{2});
+            test.execute(BytesWritten{6});
+            test.execute(RemainingCapacity{11});
+            test.execute(BufferSize{4});
+            test.execute(Peek{"ttac"});
 
-      test.execute( Pop { 4 } );
+            test.execute(Pop{4});
 
-      test.execute( IsClosed { true } );
-      test.execute( BufferEmpty { true } );
-      test.execute( IsFinished { true } );
-      test.execute( BytesPopped { 6 } );
-      test.execute( BytesPushed { 6 } );
-      test.execute( AvailableCapacity { 15 } );
-      test.execute( BytesBuffered { 0 } );
+            test.execute(InputEnded{true});
+            test.execute(BufferEmpty{true});
+            test.execute(Eof{true});
+            test.execute(BytesRead{6});
+            test.execute(BytesWritten{6});
+            test.execute(RemainingCapacity{15});
+            test.execute(BufferSize{0});
+        }
+
+        {
+            ByteStreamTestHarness test{"write-pop-write-end-pop", 15};
+
+            test.execute(Write{"cat"});
+
+            test.execute(InputEnded{false});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{0});
+            test.execute(BytesWritten{3});
+            test.execute(RemainingCapacity{12});
+            test.execute(BufferSize{3});
+            test.execute(Peek{"cat"});
+
+            test.execute(Pop{2});
+
+            test.execute(InputEnded{false});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{2});
+            test.execute(BytesWritten{3});
+            test.execute(RemainingCapacity{14});
+            test.execute(BufferSize{1});
+            test.execute(Peek{"t"});
+
+            test.execute(Write{"tac"});
+
+            test.execute(InputEnded{false});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{2});
+            test.execute(BytesWritten{6});
+            test.execute(RemainingCapacity{11});
+            test.execute(BufferSize{4});
+            test.execute(Peek{"ttac"});
+
+            test.execute(EndInput{});
+
+            test.execute(InputEnded{true});
+            test.execute(BufferEmpty{false});
+            test.execute(Eof{false});
+            test.execute(BytesRead{2});
+            test.execute(BytesWritten{6});
+            test.execute(RemainingCapacity{11});
+            test.execute(BufferSize{4});
+            test.execute(Peek{"ttac"});
+
+            test.execute(Pop{4});
+
+            test.execute(InputEnded{true});
+            test.execute(BufferEmpty{true});
+            test.execute(Eof{true});
+            test.execute(BytesRead{6});
+            test.execute(BytesWritten{6});
+            test.execute(RemainingCapacity{15});
+            test.execute(BufferSize{0});
+        }
+
+    } catch (const exception &e) {
+        cerr << "Exception: " << e.what() << endl;
+        return EXIT_FAILURE;
     }
 
-    {
-      ByteStreamTestHarness test { "write-pop-write-end-pop", 15 };
-
-      test.execute( Push { "cat" } );
-
-      test.execute( IsClosed { false } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 0 } );
-      test.execute( BytesPushed { 3 } );
-      test.execute( AvailableCapacity { 12 } );
-      test.execute( BytesBuffered { 3 } );
-      test.execute( Peek { "cat" } );
-
-      test.execute( Pop { 2 } );
-
-      test.execute( IsClosed { false } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 2 } );
-      test.execute( BytesPushed { 3 } );
-      test.execute( AvailableCapacity { 14 } );
-      test.execute( BytesBuffered { 1 } );
-      test.execute( Peek { "t" } );
-
-      test.execute( Push { "tac" } );
-
-      test.execute( IsClosed { false } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 2 } );
-      test.execute( BytesPushed { 6 } );
-      test.execute( AvailableCapacity { 11 } );
-      test.execute( BytesBuffered { 4 } );
-      test.execute( Peek { "ttac" } );
-
-      test.execute( Close {} );
-
-      test.execute( IsClosed { true } );
-      test.execute( BufferEmpty { false } );
-      test.execute( IsFinished { false } );
-      test.execute( BytesPopped { 2 } );
-      test.execute( BytesPushed { 6 } );
-      test.execute( AvailableCapacity { 11 } );
-      test.execute( BytesBuffered { 4 } );
-      test.execute( Peek { "ttac" } );
-
-      test.execute( Pop { 4 } );
-
-      test.execute( IsClosed { true } );
-      test.execute( BufferEmpty { true } );
-      test.execute( IsFinished { true } );
-      test.execute( BytesPopped { 6 } );
-      test.execute( BytesPushed { 6 } );
-      test.execute( AvailableCapacity { 15 } );
-      test.execute( BytesBuffered { 0 } );
-    }
-
-  } catch ( const exception& e ) {
-    cerr << "Exception: " << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }

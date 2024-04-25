@@ -1,23 +1,26 @@
 ---
 Language: Cpp
-BasedOnStyle: Mozilla
-ColumnLimit: 116
-SpacesInParentheses: true
-AlwaysBreakAfterReturnType: None
-AlwaysBreakAfterDefinitionReturnType: None
-SpaceBeforeCpp11BracedList: true
-BreakBeforeBinaryOperators: All
-Cpp11BracedListStyle: true
-AllowShortBlocksOnASingleLine: Always
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterClass: true
-  AfterControlStatement: Never
-  AfterFunction: true
-  AfterStruct: true
-  AfterEnum: true
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: false
-PackConstructorInitializers: NextLine
+BasedOnStyle: LLVM
+AllowAllParametersOfDeclarationOnNextLine: false
+AlwaysBreakTemplateDeclarations: true
+BinPackArguments: false
+BinPackParameters: false
+BreakConstructorInitializers: BeforeComma
+ColumnLimit: 120
+CommentPragmas: '^(!|NOLINT)'
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+IncludeBlocks: Regroup
+IncludeCategories: 
+  - Regex: '^<.*'
+    Priority: 2
+  - Regex: '.*'
+    Priority: 1
+IncludeIsMainRegex: '(_dt|_win)?$'
+IndentCaseLabels: true
+IndentWidth: 4
+KeepEmptyLinesAtTheStartOfBlocks: false
+PenaltyReturnTypeOnItsOwnLine: 200
+SpacesBeforeTrailingComments: 2
+TabWidth: 4
+UseTab: Never
 ...

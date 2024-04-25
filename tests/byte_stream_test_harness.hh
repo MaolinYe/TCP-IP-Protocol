@@ -1,191 +1,142 @@
-#pragma once
+#ifndef SPONGE_BYTE_STREAM_HARNESS_HH
+#define SPONGE_BYTE_STREAM_HARNESS_HH
 
 #include "byte_stream.hh"
-#include "common.hh"
+#include "util.hh"
 
-#include <concepts>
+#include <exception>
+#include <initializer_list>
+#include <iostream>
+#include <memory>
 #include <optional>
-#include <utility>
+#include <string>
 
-static_assert( sizeof( Reader ) == sizeof( ByteStream ),
-               "Please add member variables to the ByteStream base, not the ByteStream Reader." );
-
-static_assert( sizeof( Writer ) == sizeof( ByteStream ),
-               "Please add member variables to the ByteStream base, not the ByteStream Writer." );
-
-class ByteStreamTestHarness : public TestHarness<ByteStream>
-{
-public:
-  ByteStreamTestHarness( std::string test_name, uint64_t capacity )
-    : TestHarness( move( test_name ), "capacity=" + std::to_string( capacity ), ByteStream { capacity } )
-  {}
-
-  size_t peek_size() { return object().reader().peek().size(); }
+struct ByteStreamTestStep {
+    virtual operator std::string() const;
+    virtual void execute(ByteStream &) const;
+    virtual ~ByteStreamTestStep();
 };
 
-/* actions */
+class ByteStreamExpectationViolation : public std::runtime_error {
+  public:
+    ByteStreamExpectationViolation(const std::string &msg);
 
-struct Push : public Action<ByteStream>
-{
-  std::string data_;
-
-  explicit Push( std::string data ) : data_( move( data ) ) {}
-  std::string description() const override { return "push \"" + Printer::prettify( data_ ) + "\" to the stream"; }
-  void execute( ByteStream& bs ) const override { bs.writer().push( data_ ); }
+    template <typename T>
+    static ByteStreamExpectationViolation property(const std::string &property_name,
+                                                   const T &expected,
+                                                   const T &actual);
 };
 
-struct Close : public Action<ByteStream>
-{
-  std::string description() const override { return "close"; }
-  void execute( ByteStream& bs ) const override { bs.writer().close(); }
+struct ByteStreamExpectation : public ByteStreamTestStep {
+    operator std::string() const override;
+    virtual std::string description() const;
+    virtual void execute(ByteStream &) const override;
+    virtual ~ByteStreamExpectation() override;
 };
 
-struct SetError : public Action<ByteStream>
-{
-  std::string description() const override { return "set_error"; }
-  void execute( ByteStream& bs ) const override { bs.set_error(); }
+struct ByteStreamAction : public ByteStreamTestStep {
+    operator std::string() const override;
+    virtual std::string description() const;
+    virtual void execute(ByteStream &) const override;
+    virtual ~ByteStreamAction() override;
 };
 
-struct Pop : public Action<ByteStream>
-{
-  size_t len_;
-
-  explicit Pop( size_t len ) : len_( len ) {}
-  std::string description() const override { return "pop( " + std::to_string( len_ ) + " )"; }
-  void execute( ByteStream& bs ) const override { bs.reader().pop( len_ ); }
+struct EndInput : public ByteStreamAction {
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-/* expectations */
+struct Write : public ByteStreamAction {
+    std::string _data;
+    std::optional<size_t> _bytes_written{};
 
-struct Peek : public Expectation<ByteStream>
-{
-  std::string output_;
-
-  explicit Peek( std::string output ) : output_( move( output ) ) {}
-
-  std::string description() const override { return "peeking produces \"" + Printer::prettify( output_ ) + "\""; }
-
-  void execute( ByteStream& bs ) const override
-  {
-    const ByteStream orig = bs;
-    std::string got;
-
-    while ( bs.reader().bytes_buffered() ) {
-      auto peeked = bs.reader().peek();
-      if ( peeked.empty() ) {
-        throw ExpectationViolation { "Reader::peek() returned empty string_view" };
-      }
-      got += peeked;
-      bs.reader().pop( peeked.size() );
-    }
-
-    if ( got != output_ ) {
-      throw ExpectationViolation { "Expected \"" + Printer::prettify( output_ ) + "\" in buffer, " + " but found \""
-                                   + Printer::prettify( got ) + "\"" };
-    }
-
-    bs = orig;
-  }
+    Write(const std::string &data);
+    Write &with_bytes_written(const size_t bytes_written);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct PeekOnce : public Peek
-{
-  using Peek::Peek;
+struct Pop : public ByteStreamAction {
+    size_t _len;
 
-  std::string description() const override
-  {
-    return "peek() gives exactly \"" + Printer::prettify( output_ ) + "\"";
-  }
-
-  void execute( ByteStream& bs ) const override
-  {
-    auto peeked = bs.reader().peek();
-    if ( peeked != output_ ) {
-      throw ExpectationViolation { "Expected exactly \"" + Printer::prettify( output_ ) + "\" at front of stream, "
-                                   + "but found \"" + Printer::prettify( peeked ) + "\"" };
-    }
-  }
+    Pop(const size_t len);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct IsClosed : public ConstExpectBool<ByteStream>
-{
-  using ConstExpectBool::ConstExpectBool;
-  std::string name() const override { return "is_closed"; }
-  bool value( const ByteStream& bs ) const override { return bs.writer().is_closed(); }
+struct InputEnded : public ByteStreamExpectation {
+    bool _input_ended;
+
+    InputEnded(const bool input_ended);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct IsFinished : public ConstExpectBool<ByteStream>
-{
-  using ConstExpectBool::ConstExpectBool;
-  std::string name() const override { return "is_finished"; }
-  bool value( const ByteStream& bs ) const override { return bs.reader().is_finished(); }
+struct BufferEmpty : public ByteStreamExpectation {
+    bool _buffer_empty;
+
+    BufferEmpty(const bool buffer_empty);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct HasError : public ConstExpectBool<ByteStream>
-{
-  using ConstExpectBool::ConstExpectBool;
-  std::string name() const override { return "has_error"; }
-  bool value( const ByteStream& bs ) const override { return bs.has_error(); }
+struct Eof : public ByteStreamExpectation {
+    bool _eof;
+
+    Eof(const bool eof);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct BytesBuffered : public ConstExpectNumber<ByteStream, uint64_t>
-{
-  using ConstExpectNumber::ConstExpectNumber;
-  std::string name() const override { return "bytes_buffered"; }
-  size_t value( const ByteStream& bs ) const override { return bs.reader().bytes_buffered(); }
+struct BufferSize : public ByteStreamExpectation {
+    size_t _buffer_size;
+
+    BufferSize(const size_t buffer_size);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct BufferEmpty : public ExpectBool<ByteStream>
-{
-  using ExpectBool::ExpectBool;
-  std::string name() const override { return "[buffer is empty]"; }
-  bool value( ByteStream& bs ) const override { return bs.reader().bytes_buffered() == 0; }
+struct BytesWritten : public ByteStreamExpectation {
+    size_t _bytes_written;
+
+    BytesWritten(const size_t bytes_written);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct AvailableCapacity : public ExpectNumber<ByteStream, uint64_t>
-{
-  using ExpectNumber::ExpectNumber;
-  std::string name() const override { return "available_capacity"; }
-  size_t value( ByteStream& bs ) const override { return bs.writer().available_capacity(); }
+struct BytesRead : public ByteStreamExpectation {
+    size_t _bytes_read;
+
+    BytesRead(const size_t bytes_read);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct BytesPushed : public ExpectNumber<ByteStream, uint64_t>
-{
-  using ExpectNumber::ExpectNumber;
-  std::string name() const override { return "bytes_pushed"; }
-  size_t value( ByteStream& bs ) const override { return bs.writer().bytes_pushed(); }
+struct RemainingCapacity : public ByteStreamExpectation {
+    size_t _remaining_capacity;
+
+    RemainingCapacity(const size_t remaining_capacity);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct BytesPopped : public ExpectNumber<ByteStream, uint64_t>
-{
-  using ExpectNumber::ExpectNumber;
-  std::string name() const override { return "bytes_popped"; }
-  size_t value( ByteStream& bs ) const override { return bs.reader().bytes_popped(); }
+struct Peek : public ByteStreamExpectation {
+    std::string _output;
+
+    Peek(const std::string &output);
+    std::string description() const override;
+    void execute(ByteStream &) const override;
 };
 
-struct ReadAll : public Expectation<ByteStream>
-{
-  std::string output_;
-  BufferEmpty empty_ { true };
+class ByteStreamTestHarness {
+    std::string _test_name;
+    ByteStream _byte_stream;
+    std::vector<std::string> _steps_executed{};
 
-  explicit ReadAll( std::string output ) : output_( move( output ) ) {}
+  public:
+    ByteStreamTestHarness(const std::string &test_name, const size_t capacity);
 
-  std::string description() const override
-  {
-    if ( output_.empty() ) {
-      return empty_.description();
-    }
-    return "reading \"" + Printer::prettify( output_ ) + "\" leaves buffer empty";
-  }
-
-  void execute( ByteStream& bs ) const override
-  {
-    std::string got;
-    read( bs.reader(), output_.size(), got );
-    if ( got != output_ ) {
-      throw ExpectationViolation { "Expected to read \"" + Printer::prettify( output_ ) + "\", but found \""
-                                   + Printer::prettify( got ) + "\"" };
-    }
-    empty_.execute( bs );
-  }
+    void execute(const ByteStreamTestStep &step);
 };
+
+#endif  // SPONGE_BYTE_STREAM_HARNESS_HH
