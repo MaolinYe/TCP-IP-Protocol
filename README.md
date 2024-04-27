@@ -1,7 +1,8 @@
 # TCP-IP-Protocol
 斯坦福计算机网络课程项目，使用C++循序渐进地搭建出整个TCP/IP协议栈，实现IP路由以及ARP协议，最后用自己实现的协议栈代替Linux Kernel的网络协议栈和其他计算机进行通信
 #### Lab0 实现简单的Web客户端和有序字节流类（内存管道）  2h(Clion+wsl) 2h 2h
-## Lab0 
+#### Lab1 实现流重组器，将交叉重叠乱序的字节流重新组装成正确有序的字节流 6h
+## Lab0 字节流
 ### 实现简单的Web客户端
 编写webget，利用操作系统的TCP支持和流套接字抽象在互联网上获取网页的程序，使用HTTP请求格式向指定URL获取响应  
 HTTP头部行尾以'\r\n'结尾，Connection: close指示服务器处理完当前请求后直接关闭
@@ -76,4 +77,42 @@ size_t ByteStream::bytes_written() const { return write_count; }
 size_t ByteStream::bytes_read() const { return read_count; }
 
 size_t ByteStream::remaining_capacity() const { return _capacity - buffer.size(); }
+```
+## Lab1 字节流重组器
+将交叉重叠乱序的字节流重新组装成正确有序的字节流，最简单粗暴的思想，用一个哈希表存储数据索引对应的字节，这样可以解决交叉重叠的问题，乱序可以从0开始查找写入流，哈希查找很快，但是插入删除很慢，实测1.24sec，同样改用红黑树映射，查找慢，但是插入删除快，实测1.83sec  
+重组器装的是字节流类ByteStream里面已经重组好的字节流和等待重组的字节流  
+无效数据：字节流尾部索引小于已重组数据索引，或者字节流首部索引大于已读数据索引+capacity
+![streamReassembler.png](images/streamReassembler.png)
+```c++
+    size_t assembledIndex = 0;
+    std::unordered_map<size_t, char> buffer{};
+    bool ending = false;
+```
+```c++
+void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
+    if (_output.buffer_size() + buffer.size() == _capacity || index + data.size() < assembledIndex ||
+        assembledIndex + _capacity - _output.buffer_size() <= index)
+        return;
+    size_t end = min(index + data.size(), assembledIndex + _capacity - _output.buffer_size());
+    size_t start = max(assembledIndex, index);
+    if (end == index + data.size() && eof)  // 如果能够完整写入末尾并且eof说明已经装上了eof
+        ending = true;
+    for (size_t i = start; i < end; ++i)
+        buffer[i] = data[i - index];  // 数据本身索引需要和整体数据索引对应
+    string segement;
+    auto &&byte = buffer.find(assembledIndex);
+    while (byte != buffer.end()) {
+        segement += buffer[assembledIndex];
+        buffer.erase(byte);
+        byte = buffer.find(++assembledIndex);
+    }
+    if (!segement.empty())
+        _output.write(segement);
+    if (buffer.empty() && ending)  // 如果重组完所有片段并且收到了结尾片段
+        _output.end_input();
+}
+
+size_t StreamReassembler::unassembled_bytes() const { return buffer.size(); }
+
+bool StreamReassembler::empty() const { return buffer.empty(); }
 ```
