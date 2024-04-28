@@ -2,6 +2,7 @@
 斯坦福计算机网络课程项目，使用C++循序渐进地搭建出整个TCP/IP协议栈，实现IP路由以及ARP协议，最后用自己实现的协议栈代替Linux Kernel的网络协议栈和其他计算机进行通信
 #### Lab0 实现简单的Web客户端和有序字节流类（内存管道）  2h(Clion+wsl) 2h 2h
 #### Lab1 实现流重组器，将交叉重叠乱序的字节流重新组装成正确有序的字节流 6h
+
 ## Lab0 字节流
 ### 实现简单的Web客户端
 编写webget，利用操作系统的TCP支持和流套接字抽象在互联网上获取网页的程序，使用HTTP请求格式向指定URL获取响应  
@@ -116,3 +117,26 @@ size_t StreamReassembler::unassembled_bytes() const { return buffer.size(); }
 
 bool StreamReassembler::empty() const { return buffer.empty(); }
 ```
+优化思路：用索引映射字符需要大量的查找、插入和删除操作，可以存储每段字符串和其索引，这样以字符串为整体可以减少大量的字符插入和删除，交叉重叠的就进行合并，合并需要遍历存储的所有字符串区间判断是否存在交叉，考虑使用链表，而且本身链表插入删除就方便，并且如果按索引进行排序插入，查找可以使用二分
+## Lab2 序列号和流量控制
+将64位的流绝对索引转变成TCP报文中32位的序列号，为了安全序列号从一个随机号开始，因此流索引需要加上这个随机号再转换类型
+```c++
+WrappingInt32 wrap(uint64_t n, WrappingInt32 isn) { return WrappingInt32(static_cast<uint32_t>(n) + isn.raw_value()); }
+```
+同时需要将32位的序列号转换成64位的流绝对索引，这里提供的一个最近收到报文的64位流绝对索引checkpoint，可以用来确定当前报文的绝对位置，因为一般来说，两个报文的位置不会超过TCP序列号的范围，即2^32，所以可以先用上面的wrap计算出checkpoint的序列号，要求返回和checkpoint最近的一个索引，先算他们两个的序列号之差，肯定落在2^32的范围里面，如果差大于2^31，说明最近的索引不在同一个2^32里面
+```c++
+uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
+    uint32_t now = n.raw_value(), last = wrap(checkpoint, isn).raw_value();
+    if (now < last) {
+        uint32_t distance = last - now;
+        if (distance > 1ul << 32 / 2 || checkpoint == 0)
+            return checkpoint + (1ul << 32) - distance;
+        return checkpoint - distance;
+    }
+    uint32_t distance = now - last;
+    if (distance > 1ul << 32 / 2 && checkpoint)
+        return checkpoint + distance - (1ul << 32);
+    return checkpoint + distance;
+}
+```
+注意：有符号短数和无符号长数运算时会先进行位扩展，即短变长，再进行符号的转变，即有符号变无符号
