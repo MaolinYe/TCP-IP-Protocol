@@ -2,7 +2,7 @@
 斯坦福计算机网络课程项目，使用C++循序渐进地搭建出整个TCP/IP协议栈，实现IP路由以及ARP协议，最后用自己实现的协议栈代替Linux Kernel的网络协议栈和其他计算机进行通信
 #### Lab0 实现简单的Web客户端和有序字节流类（内存管道）  2h(Clion+wsl) 2h 2h
 #### Lab1 实现流重组器，将交叉重叠乱序的字节流重新组装成正确有序的字节流 6h
-
+#### Lab2 实现TCP接收器，32位序列号到64位字节流索引的转换，计算确认号，告知发送方接收窗口的大小来实现流量控制 10h
 ## Lab0 字节流
 ### 实现简单的Web客户端
 编写webget，利用操作系统的TCP支持和流套接字抽象在互联网上获取网页的程序，使用HTTP请求格式向指定URL获取响应  
@@ -139,4 +139,44 @@ uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
     return checkpoint + distance;
 }
 ```
-注意：有符号短数和无符号长数运算时会先进行位扩展，即短变长，再进行符号的转变，即有符号变无符号
+注意：有符号短数和无符号长数运算时会先进行位扩展，即短变长，再进行符号的转变，即有符号变无符号  
+要实现TCP接收器，将TCP报文中的序列号转换成流重组器可用的字节流索引，计算接收窗口大小，收到SYN报文开始接收数据，收到FIN报文停止接收数据  
+通过流重组器中已经排好的字节数目可以确定目前字节流的绝对索引，但是流重组器的索引从0开始，但是SYN包可以没有数据却也占一个序列号，所以整体数据往前移动一位  
+还需要注意确认号和序列号之间可以判断来的报文在不在接收窗口范围内
+```c++
+    size_t _capacity;
+    WrappingInt32 isn;
+    uint64_t abs_seq = 1;
+    bool SYN = false;
+    bool FIN = false;
+```
+```c++
+bool TCPReceiver::segment_received(const TCPSegment &seg) {
+    if ((SYN == false && seg.header().syn == false) || (SYN && seg.header().syn) || (FIN && seg.header().fin))
+        return false; // 收到SYN报文开始接收数据，收到FIN报文停止接收数据 
+    if (ackno()) { // 注意确认号和序列号之间可以判断来的报文在不在接收窗口范围内
+        uint32_t seq = seg.header().seqno.raw_value(), ack = ackno()->raw_value();
+        if (seq + seg.length_in_sequence_space() <= ack || seq >= ack + window_size())
+            return false;
+    }
+    if (seg.header().fin)
+        FIN = true;
+    if (seg.header().syn) {
+        SYN = true;
+        isn = seg.header().seqno;
+    } else // 流重组器中已经排好的字节数目可以确定目前字节流的绝对索引
+        abs_seq = unwrap(seg.header().seqno, isn, _reassembler.stream_out().bytes_written());
+    _reassembler.push_substring(seg.payload().copy(), abs_seq - 1, seg.header().fin); // SYN包可以没有数据却也占一个序列号
+    return true;
+}
+```
+确认号为期待收到的下一个序列号，即是当前已接收的字节流长度加上初始序列号，因为SYN和FIN都要占一个字节，所以要加上
+```c++
+optional<WrappingInt32> TCPReceiver::ackno() const {
+    if (SYN == false)
+        return nullopt;
+    return wrap(_reassembler.stream_out().bytes_written(), isn) + SYN + FIN;
+}
+
+size_t TCPReceiver::window_size() const { return _capacity - _reassembler.stream_out().buffer_size(); }
+```
